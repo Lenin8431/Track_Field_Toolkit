@@ -1,10 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="田径通用工具"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
         android:name="${applicationName}"
         android:hardwareAccelerated="true">
         <activity
             android:name=".MainActivity"
+            android:label="@string/app_name"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"

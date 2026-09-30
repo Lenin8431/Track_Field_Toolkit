@@ -10,7 +10,8 @@
 ## 一、在 GitHub 上自动生成 APK（推荐，无需本地环境）
 
 项目已内置 GitHub Actions 工作流：`.github/workflows/build-apk.yml`。
-Flutter 版本与依赖均已固定（Flutter 3.24.3 + shared_preferences 2.2.3），保证云端构建稳定可复现。
+Flutter 版本已固定（3.24.3），且**应用运行时不依赖任何第三方插件**（本地存储用 `dart:io` 直接写 JSON 文件），
+避免 Android 插件与 compileSdk / AGP 版本冲突，保证云端构建稳定可复现。
 
 使用步骤：
 
@@ -77,16 +78,25 @@ track_field_toolkit_flutter/
 
 ## 四、模块一：跑圈计时
 
-- **单圈距离**：默认 400 米，可自由输入，另有 200 / 400 / 800 / 1000 米快捷选择。
+- **跑道长度**：仅支持 200m / 300m / 400m 三种。
+- **计划圈数**：支持小数。以 400m 跑道为例，800m 输入 2 圈，1500m 输入 3.75 圈；
+  也可以直接点 800 / 1500 / 3000 / 5000 / 10000m 快捷按钮，自动换算圈数。
 - **计时面板**：精确到 0.01 秒，基于 `Stopwatch` 单调时钟，暂停/休息不计入跑步时长。
 - **开始 / 暂停**：可反复暂停继续。
 - **休息计时**：点击后自动暂停跑步并独立累计休息时间；再次点击结束休息，
   如果休息前正在跑则自动继续；支持一场训练多次插入休息。
-- **计圈**：记录当前这一圈用时（只含跑步时间，不含休息）。
-- **结束**：自动补全最后一圈，保存记录并清空面板。
+- **计圈**：记录当前这一段的用时（只含跑步时间，不含休息），
+  **计时中和暂停状态都可以计圈**。
+- **结束**：只补全“计划内还没记录完”的分段，不会凭空多出一圈。
 
-记录内容：总时长、跑步净时长、休息总时长、每圈用时与配速、单圈距离、总圈数、总距离。
-记录用 `shared_preferences` 保存在手机本地，在首页进入「历史训练记录」可查看详情、单条删除或清空。
+分段命名规则：整圈显示为「第N圈」，最后不足一圈的部分显示为「最后Xm」。
+例如 400m 跑道跑 1500m（3.75 圈），分段为
+**第1圈、第2圈、第3圈、最后300m** 共 4 段，每段一个用时，最下面一行是合计总时间。
+
+记录内容：总时长、跑步净时长、休息总时长、跑道长度、计划圈数、每一段用时与配速、总距离。
+记录以 JSON 文件（`training_records_v1.json`）保存在应用私有目录
+（`/data/user/0/com.track.toolkit/files/`），卸载应用时随数据一起清除；
+在首页进入「历史训练记录」可查看详情、单条删除或清空。
 
 ## 五、模块二：中距离比赛配速模拟器
 
@@ -105,3 +115,35 @@ track_field_toolkit_flutter/
 
 拆分算法：按跑法给每段分配速度系数（激进型前快后略慢、稳妥型前保守后加速、平均型恒定），
 以「距离 ÷ 速度系数」为权重，把目标总时间等比分配到各分段，保证各段之和等于目标完赛时间。
+
+## 六、应用名、桌面图标与版本号
+
+- **应用名（桌面图标下方的文字）**：定义在 `android/app/src/main/res/values/strings.xml` 的 `app_name`，
+  AndroidManifest 里 `<application>` 与 `<activity>` 都引用 `@string/app_name`。
+  之前应用名只硬编码写在 AndroidManifest 中，一旦被 `flutter create` 之类的步骤覆盖或未被 ROM 识别，
+  桌面就会显示空白名字，现已改为标准做法。
+- **桌面图标**：`mipmap-anydpi-v26/ic_launcher.xml`（Android 8.0+ 自适应图标）
+  + `mipmap-anydpi/ic_launcher.xml`（低版本回退矢量图标），图案为蓝色底 + 白色秒表。
+- **版本号**：`android/app/build.gradle` 会在 pubspec 版本号后追加 beta 标记，
+  当前对外版本为 `1.0.0（beta）`，versionCode = 2；首页底部也会显示该版本号。
+
+改了 `applicationId` 时，记得同步修改 `lib/services/training_repository.dart` 里的存储路径常量。
+
+> 提示：如果重新安装后桌面名字仍为空，请先卸载旧版本再安装新 APK——
+> 大部分桌面（Launcher）会缓存同一包名的图标与名称。
+
+## 七、本地验证结果
+
+本项目已在本地用 Flutter 3.24.3 实际验证过：
+
+```
+flutter analyze   ->  No issues found!
+flutter test      ->  All tests passed!（12 个测试）
+```
+
+并用 Android SDK 的 aapt2 校验过资源与清单：
+
+```
+aapt2 dump badging -> application-label:'田径通用工具'
+                      application-icon: res/mipmap-anydpi-v26/ic_launcher.xml
+```

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标前景：白色秒表表盘 + 蓝色指针 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,62m-24,0a24,24 0 1,0 48,0a24,24 0 1,0 -48,0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47,30h14v8h-14z" />
+    <path
+        android:fillColor="#0B5FFF"
+        android:pathData="M51,44h6v20h-6z" />
+    <path
+        android:fillColor="#0B5FFF"
+        android:pathData="M54,59h16v6h-16z" />
+</vector>

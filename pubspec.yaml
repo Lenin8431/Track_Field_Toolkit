@@ -1,7 +1,7 @@
 name: track_field_toolkit
 description: 田径通用工具 - 跑圈计时与中距离比赛配速模拟器
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -9,8 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # 固定版本，保证与 CI 中 Flutter 3.24.3 / compileSdk 34 完全兼容
-  shared_preferences: 2.2.3
+  # 说明：应用运行时不依赖任何第三方插件，
+  # 训练记录用 dart:io 写入应用私有目录，避免 Android 插件与 compileSdk 版本冲突。
 
 dev_dependencies:
   flutter_test:

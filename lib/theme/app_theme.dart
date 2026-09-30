@@ -39,41 +39,62 @@ ThemeData buildAppTheme() {
   );
 
   return base.copyWith(
+    // 注意：这里必须用 base 里已有样式 copyWith，保留 ColorScheme 提供的文字颜色，
+    // 否则 color 会变成 null，未显式指定颜色的文字（输入框内容、表格数据行等）会显示为空白。
     textTheme: base.textTheme.copyWith(
-      displayLarge: const TextStyle(
+      displayLarge: base.textTheme.displayLarge!.copyWith(
         fontSize: 58,
         fontWeight: FontWeight.w700,
         letterSpacing: -1,
-        color: kTextColor,
       ),
-      displayMedium: const TextStyle(
+      displayMedium: base.textTheme.displayMedium!.copyWith(
         fontSize: 42,
         fontWeight: FontWeight.w700,
-        color: kTextColor,
       ),
-      headlineMedium: const TextStyle(
+      headlineMedium: base.textTheme.headlineMedium!.copyWith(
         fontSize: 26,
         fontWeight: FontWeight.w700,
-        color: kTextColor,
       ),
-      headlineSmall: const TextStyle(
+      headlineSmall: base.textTheme.headlineSmall!.copyWith(
         fontSize: 22,
         fontWeight: FontWeight.w700,
-        color: kTextColor,
       ),
-      titleLarge: const TextStyle(
+      titleLarge: base.textTheme.titleLarge!.copyWith(
         fontSize: 20,
         fontWeight: FontWeight.w600,
-        color: kTextColor,
       ),
-      titleMedium: const TextStyle(
+      titleMedium: base.textTheme.titleMedium!.copyWith(
         fontSize: 17,
         fontWeight: FontWeight.w600,
-        color: kTextColor,
       ),
-      bodyLarge: const TextStyle(fontSize: 16, height: 1.35),
-      bodyMedium: const TextStyle(fontSize: 14.5, height: 1.35),
-      labelLarge: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      bodyLarge: base.textTheme.bodyLarge!.copyWith(
+        fontSize: 16,
+        height: 1.35,
+      ),
+      bodyMedium: base.textTheme.bodyMedium!.copyWith(
+        fontSize: 14.5,
+        height: 1.35,
+      ),
+      bodySmall: base.textTheme.bodySmall!.copyWith(
+        fontSize: 13,
+        color: kMutedTextColor,
+      ),
+      labelLarge: base.textTheme.labelLarge!.copyWith(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
+      labelMedium: base.textTheme.labelMedium!.copyWith(fontSize: 14),
+    ),
+    // 输入框统一使用深色文字，避免在任何主题下出现白字白底。
+    inputDecorationTheme: InputDecorationTheme(
+      labelStyle: base.textTheme.bodyLarge!.copyWith(color: kMutedTextColor),
+      floatingLabelStyle: base.textTheme.bodyLarge!.copyWith(
+        color: kPrimaryColor,
+      ),
+      hintStyle: base.textTheme.bodyLarge!.copyWith(color: kMutedTextColor),
+      helperStyle: base.textTheme.bodySmall!.copyWith(color: kMutedTextColor),
+      errorStyle: base.textTheme.bodySmall!.copyWith(color: kDangerColor),
+      border: const OutlineInputBorder(),
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.white,

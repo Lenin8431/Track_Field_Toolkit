@@ -128,6 +128,11 @@ class _PaceScreenState extends State<PaceScreen> {
           TextField(
             controller: _timeController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: kTextColor,
+            ),
             decoration: InputDecoration(
               labelText: '目标完赛总时间',
               hintText: '例如 2:00 / 16:30 / 1:05:00',
@@ -238,8 +243,8 @@ class _PaceScreenState extends State<PaceScreen> {
               style: theme.textTheme.bodyLarge?.copyWith(color: kDangerColor),
             )
           else ...<Widget>[
-            _PlanRow(
-              cells: const <String>['段', '距离', '本段用时', '累计', '配速/km'],
+            const _PlanRow(
+              cells: <String>['段', '距离', '本段用时', '累计', '配速/km'],
               flex: _rowFlex,
               isHeader: true,
             ),
@@ -298,7 +303,7 @@ class _PlanRow extends StatelessWidget {
                     ? theme.textTheme.titleMedium?.copyWith(
                         color: kPrimaryColor,
                       )
-                    : theme.textTheme.bodyLarge,
+                    : theme.textTheme.bodyLarge?.copyWith(color: kTextColor),
               ),
             ),
         ],

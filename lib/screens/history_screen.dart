@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/training_record.dart';
 import '../services/training_repository.dart';
 import '../theme/app_theme.dart';
+import '../utils/lap_plan.dart';
 import '../utils/time_format.dart';
 import '../widgets/app_widgets.dart';
 import 'record_detail_screen.dart';
@@ -101,7 +102,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             child: Text(
                               '还没有训练记录。完成一次跑圈计时并点击【结束】后，'
                               '记录会自动保存在这里。',
-                              style: TextStyle(fontSize: 16),
+                              style: TextStyle(fontSize: 16, color: kTextColor),
                             ),
                           )
                         else
@@ -163,8 +164,10 @@ class _RecordCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${record.lapCount} 圈 × ${record.lapDistanceMeters}m'
-                      '  ·  总距离 ${record.totalDistanceMeters}m',
+                      '${record.trackLengthMeters}m 跑道 · '
+                      '${formatLaps(record.plannedLaps)} 圈 · '
+                      '${record.segmentCount} 段 · '
+                      '${record.totalDistanceMeters}m',
                       style: Theme.of(
                         context,
                       ).textTheme.bodyMedium?.copyWith(color: kMutedTextColor),

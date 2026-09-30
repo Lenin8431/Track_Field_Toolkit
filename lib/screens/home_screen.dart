@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app_info.dart';
 import '../theme/app_theme.dart';
 import 'history_screen.dart';
 import 'pace_screen.dart';
@@ -16,7 +17,7 @@ class HomeScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
           children: <Widget>[
             Text(
-              '田径通用工具',
+              kAppDisplayName,
               style: Theme.of(context).textTheme.displayMedium,
             ),
             const SizedBox(height: 6),
@@ -54,6 +55,15 @@ class HomeScreen extends StatelessWidget {
                 MaterialPageRoute<void>(
                   builder: (BuildContext context) => const HistoryScreen(),
                 ),
+              ),
+            ),
+            const SizedBox(height: 26),
+            Center(
+              child: Text(
+                '版本 $kAppVersionName',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: kMutedTextColor),
               ),
             ),
           ],

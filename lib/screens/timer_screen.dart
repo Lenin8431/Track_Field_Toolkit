@@ -1,14 +1,22 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../models/training_record.dart';
 import '../services/training_repository.dart';
 import '../theme/app_theme.dart';
+import '../utils/lap_plan.dart';
 import '../utils/time_format.dart';
 import '../widgets/app_widgets.dart';
 import 'record_detail_screen.dart';
 
+/// 跑圈计时。
+///
+/// 使用流程：先选跑道长度（200 / 300 / 400m），再设置计划圈数（支持小数，
+/// 例如 400m 跑道跑 1500m 就是 3.75 圈），然后开始计时、每完成一段点一次【计圈】。
+/// 最后不足一圈的部分会显示为「最后Xm」，例如 1500m 在 400m 跑道上为
+/// 第1圈、第2圈、第3圈、最后300m 共 4 段。
 class TimerScreen extends StatefulWidget {
   const TimerScreen({super.key});
 
@@ -17,20 +25,29 @@ class TimerScreen extends StatefulWidget {
 }
 
 class _TimerScreenState extends State<TimerScreen> {
+  static const List<int> _distancePresets = <int>[
+    800,
+    1500,
+    3000,
+    5000,
+    10000,
+  ];
+
   final TrainingRepository _repository = TrainingRepository();
-  final TextEditingController _lapDistanceController = TextEditingController(
-    text: '400',
+  final TextEditingController _lapsController = TextEditingController(
+    text: '2',
   );
 
   final Stopwatch _runStopwatch = Stopwatch();
   final Stopwatch _restStopwatch = Stopwatch();
-  final List<int> _laps = <int>[];
+  final List<LapSegment> _segments = <LapSegment>[];
 
   Timer? _ticker;
   Duration _runAccumulated = Duration.zero;
   Duration _restAccumulated = Duration.zero;
-  Duration _lastLapMark = Duration.zero;
-  int _lapDistanceMeters = 400;
+  Duration _lastSegmentMark = Duration.zero;
+  int _trackLengthMeters = 400;
+  double _plannedLaps = 2;
   int _restCount = 0;
   bool _isRunning = false;
   bool _isResting = false;
@@ -50,9 +67,33 @@ class _TimerScreenState extends State<TimerScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
-    _lapDistanceController.dispose();
+    _lapsController.dispose();
     super.dispose();
   }
+
+  // ---------------- 计划 ----------------
+
+  List<int> get _plannedDistances => buildPlannedDistances(
+    trackLengthMeters: _trackLengthMeters,
+    laps: _plannedLaps,
+  );
+
+  int get _plannedSegmentCount => _plannedDistances.length;
+
+  int get _plannedDistanceMeters =>
+      (_plannedLaps * _trackLengthMeters).round();
+
+  int get _nextSegmentDistance => _segments.length < _plannedDistances.length
+      ? _plannedDistances[_segments.length]
+      : _trackLengthMeters;
+
+  String get _nextSegmentLabel => lapSegmentLabel(
+    trackLengthMeters: _trackLengthMeters,
+    index: _segments.length + 1,
+    distanceMeters: _nextSegmentDistance,
+  );
+
+  // ---------------- 计时状态 ----------------
 
   Duration get _runElapsed =>
       _runAccumulated + (_isRunning ? _runStopwatch.elapsed : Duration.zero);
@@ -64,14 +105,30 @@ class _TimerScreenState extends State<TimerScreen> {
 
   Duration get _totalElapsed => _runElapsed + _restTotal;
 
-  Duration get _currentLap => _runElapsed - _lastLapMark;
+  /// 当前未记录分段的用时（暂停时保持不变）。
+  Duration get _currentSegment =>
+      (_runElapsed - _lastSegmentMark) > Duration.zero
+      ? _runElapsed - _lastSegmentMark
+      : Duration.zero;
+
+  int get _recordedDistanceMeters => _segments.fold(
+    0,
+    (int sum, LapSegment segment) => sum + segment.distanceMeters,
+  );
 
   bool get _hasSession =>
       _runElapsed > Duration.zero ||
       _restTotal > Duration.zero ||
-      _laps.isNotEmpty ||
+      _segments.isNotEmpty ||
       _isRunning ||
       _isResting;
+
+  /// 计时中或暂停时都可以计圈（休息中除外）。
+  bool get _canRecordSegment =>
+      !_isResting &&
+      _hasSession &&
+      _currentSegment > Duration.zero &&
+      _segments.length < kMaxSegments;
 
   String get _statusText {
     if (_isResting) {
@@ -85,6 +142,37 @@ class _TimerScreenState extends State<TimerScreen> {
     }
     return '准备开始';
   }
+
+  // ---------------- 计划设置 ----------------
+
+  void _selectTrackLength(int meters) {
+    if (_hasSession) {
+      return;
+    }
+    setState(() => _trackLengthMeters = meters);
+  }
+
+  void _onLapsChanged(String value) {
+    final double? parsed = double.tryParse(value.trim());
+    if (parsed == null || parsed <= 0 || parsed > kMaxSegments) {
+      return;
+    }
+    setState(() => _plannedLaps = parsed);
+  }
+
+  void _applyDistancePreset(int meters) {
+    if (_hasSession || _trackLengthMeters <= 0) {
+      return;
+    }
+    final double laps = meters / _trackLengthMeters;
+    final double rounded = (laps * 1000).round() / 1000;
+    setState(() {
+      _plannedLaps = rounded;
+      _lapsController.text = formatLaps(rounded);
+    });
+  }
+
+  // ---------------- 计时操作 ----------------
 
   void _startRun() {
     if (_isRunning || _isResting) {
@@ -149,15 +237,17 @@ class _TimerScreenState extends State<TimerScreen> {
     });
   }
 
-  void _recordLap() {
-    final Duration runElapsed = _runElapsed;
-    final Duration split = runElapsed - _lastLapMark;
+  /// 记录一个分段：计时中或暂停时都可用。
+  void _recordSegment() {
+    final Duration split = _currentSegment;
     if (split <= Duration.zero) {
       return;
     }
     setState(() {
-      _laps.add(split.inMilliseconds);
-      _lastLapMark = runElapsed;
+      _segments.add(
+        LapSegment(distanceMeters: _nextSegmentDistance, millis: split.inMilliseconds),
+      );
+      _lastSegmentMark = _runElapsed;
     });
   }
 
@@ -171,8 +261,8 @@ class _TimerScreenState extends State<TimerScreen> {
     setState(() {
       _runAccumulated = Duration.zero;
       _restAccumulated = Duration.zero;
-      _lastLapMark = Duration.zero;
-      _laps.clear();
+      _lastSegmentMark = Duration.zero;
+      _segments.clear();
       _isRunning = false;
       _isResting = false;
       _resumeRunAfterRest = false;
@@ -185,14 +275,20 @@ class _TimerScreenState extends State<TimerScreen> {
     final Duration restTotal = _restTotal;
     if (runElapsed <= Duration.zero &&
         restTotal <= Duration.zero &&
-        _laps.isEmpty) {
+        _segments.isEmpty) {
       return;
     }
 
-    final List<int> laps = List<int>.from(_laps);
-    final Duration remaining = runElapsed - _lastLapMark;
-    if (remaining > Duration.zero) {
-      laps.add(remaining.inMilliseconds);
+    final List<LapSegment> segments = List<LapSegment>.from(_segments);
+    final Duration remaining = _currentSegment;
+    // 只有计划内还没记录完的分段才自动补上，避免出现“多一圈”的记录。
+    if (segments.length < _plannedSegmentCount && remaining > Duration.zero) {
+      segments.add(
+        LapSegment(
+          distanceMeters: _nextSegmentDistance,
+          millis: remaining.inMilliseconds,
+        ),
+      );
     }
 
     final TrainingRecord record = TrainingRecord(
@@ -201,8 +297,9 @@ class _TimerScreenState extends State<TimerScreen> {
       totalMillis: (runElapsed + restTotal).inMilliseconds,
       runMillis: runElapsed.inMilliseconds,
       restMillis: restTotal.inMilliseconds,
-      lapDistanceMeters: _lapDistanceMeters,
-      laps: laps,
+      trackLengthMeters: _trackLengthMeters,
+      plannedLaps: _plannedLaps,
+      segments: segments,
     );
     await _repository.addRecord(record);
     if (!mounted) {
@@ -220,8 +317,8 @@ class _TimerScreenState extends State<TimerScreen> {
             Text('总时长：${formatDuration(record.total)}'),
             Text('跑步净时长：${formatDuration(record.run)}'),
             Text('休息总时长：${formatDuration(record.rest)}'),
-            Text('圈数：${record.lapCount} 圈 × ${record.lapDistanceMeters}m'),
-            Text('总距离：${record.totalDistanceMeters}m'),
+            Text('跑道：${record.trackLengthMeters}m · 计划 ${formatLaps(record.plannedLaps)} 圈'),
+            Text('分段：${record.segmentCount} 段 · 总距离 ${record.totalDistanceMeters}m'),
           ],
         ),
         actions: <Widget>[
@@ -246,6 +343,8 @@ class _TimerScreenState extends State<TimerScreen> {
     );
   }
 
+  // ---------------- 界面 ----------------
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -261,11 +360,11 @@ class _TimerScreenState extends State<TimerScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                 children: <Widget>[
-                  _buildLapDistanceCard(),
+                  _buildPlanCard(theme),
                   const SizedBox(height: 14),
                   _buildTimerCard(theme),
                   const SizedBox(height: 14),
-                  _buildLapActionCard(theme),
+                  _buildCurrentSegmentCard(theme),
                   const SizedBox(height: 14),
                   Row(
                     children: <Widget>[
@@ -315,7 +414,7 @@ class _TimerScreenState extends State<TimerScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  _buildLapListCard(theme),
+                  _buildSegmentsCard(theme),
                 ],
               ),
             ),
@@ -325,43 +424,63 @@ class _TimerScreenState extends State<TimerScreen> {
     );
   }
 
-  Widget _buildLapDistanceCard() {
+  Widget _buildPlanCard(ThemeData theme) {
+    final List<int> planned = _plannedDistances;
+    final String planSummary = planned.isEmpty
+        ? '请设置跑道长度与圈数'
+        : '计划 ${formatLaps(_plannedLaps)} 圈 = ${_plannedDistanceMeters}m，共 ${planned.length} 段';
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const SectionTitle('单圈距离'),
+          const SectionTitle('1. 跑道长度'),
           const SizedBox(height: 10),
-          TextField(
-            controller: _lapDistanceController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: '单圈距离（米）',
-              suffixText: '米',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (String value) {
-              final int? parsed = int.tryParse(value);
-              if (parsed != null && parsed > 0) {
-                setState(() {
-                  _lapDistanceMeters = parsed.clamp(20, 20000).toInt();
-                });
-              }
-            },
-          ),
-          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
-            children: <int>[200, 400, 800, 1000].map((int distance) {
+            children: kSupportedTrackLengths.map((int length) {
               return ChoiceChip(
-                label: Text('${distance}m'),
-                selected: _lapDistanceMeters == distance,
-                onSelected: (bool selected) {
-                  _lapDistanceController.text = '$distance';
-                  setState(() => _lapDistanceMeters = distance);
-                },
+                label: Text('${length}m'),
+                selected: _trackLengthMeters == length,
+                onSelected: (bool selected) => _selectTrackLength(length),
               );
             }).toList(),
+          ),
+          const SizedBox(height: 14),
+          const SectionTitle('2. 计划圈数'),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _lapsController,
+            enabled: !_hasSession,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: kTextColor,
+            ),
+            decoration: const InputDecoration(
+              labelText: '计划圈数（支持小数）',
+              helperText: '例：400m 跑道跑 1500m 输入 3.75',
+              suffixText: '圈',
+            ),
+            onChanged: _onLapsChanged,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _distancePresets.map((int meters) {
+              final bool selected = _plannedDistanceMeters == meters;
+              return ChoiceChip(
+                label: Text('${meters}m'),
+                selected: selected,
+                onSelected: (bool value) => _applyDistancePreset(meters),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            planSummary,
+            style: theme.textTheme.bodyMedium?.copyWith(color: kMutedTextColor),
           ),
         ],
       ),
@@ -422,14 +541,14 @@ class _TimerScreenState extends State<TimerScreen> {
               children: <Widget>[
                 Expanded(
                   child: LabeledValue(
-                    label: '已计圈数',
-                    value: '${_laps.length} 圈',
+                    label: '已记录分段',
+                    value: '${_segments.length} / $_plannedSegmentCount',
                   ),
                 ),
                 Expanded(
                   child: LabeledValue(
-                    label: '本次休息',
-                    value: formatStopwatch(_currentRest),
+                    label: '已跑距离',
+                    value: '$_recordedDistanceMeters m',
                   ),
                 ),
               ],
@@ -440,7 +559,7 @@ class _TimerScreenState extends State<TimerScreen> {
     );
   }
 
-  Widget _buildLapActionCard(ThemeData theme) {
+  Widget _buildCurrentSegmentCard(ThemeData theme) {
     return AppCard(
       child: Row(
         children: <Widget>[
@@ -448,10 +567,10 @@ class _TimerScreenState extends State<TimerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const SectionTitle('本圈用时'),
+                SectionTitle('本段：$_nextSegmentLabel（${_nextSegmentDistance}m）'),
                 const SizedBox(height: 4),
                 Text(
-                  formatStopwatch(_currentLap),
+                  formatStopwatch(_currentSegment),
                   style: theme.textTheme.headlineMedium,
                 ),
               ],
@@ -460,9 +579,7 @@ class _TimerScreenState extends State<TimerScreen> {
           SizedBox(
             height: 62,
             child: ElevatedButton(
-              onPressed: (_isRunning && _currentLap > Duration.zero)
-                  ? _recordLap
-                  : null,
+              onPressed: _canRecordSegment ? _recordSegment : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: kPrimaryColor,
                 foregroundColor: Colors.white,
@@ -482,58 +599,131 @@ class _TimerScreenState extends State<TimerScreen> {
     );
   }
 
-  Widget _buildLapListCard(ThemeData theme) {
+  Widget _buildSegmentsCard(ThemeData theme) {
+    final List<int> planned = _plannedDistances;
+    final int rowCount = math.max(planned.length, _segments.length);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          SectionTitle('分圈记录（共 ${_laps.length} 圈）'),
+          SectionTitle(
+            '分段记录（已记录 ${_segments.length} / ${planned.isEmpty ? 0 : planned.length} 段）',
+          ),
           const SizedBox(height: 8),
-          if (_laps.isEmpty)
+          if (rowCount == 0)
             Text(
-              '开始计时后点击【计圈】即可记录每一圈用时。',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: kMutedTextColor,
-              ),
+              '请先选择跑道长度并设置圈数。',
+              style: theme.textTheme.bodyLarge?.copyWith(color: kMutedTextColor),
             )
-          else
-            ...List<Widget>.generate(_laps.length, (int i) {
-              final int index = _laps.length - 1 - i;
-              final int millis = _laps[index];
-              final int distance = _lapDistanceMeters <= 0
-                  ? 1
-                  : _lapDistanceMeters;
-              final double pace = millis / 1000 / distance * 1000;
-              return Column(
+          else ...<Widget>[
+            const _SegmentHeaderRow(),
+            const Divider(height: 1),
+            for (int i = 0; i < rowCount; i++) _buildSegmentRow(theme, i, planned),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
                 children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            '第 ${index + 1} 圈',
-                            style: theme.textTheme.titleMedium,
-                          ),
-                        ),
-                        Text(
-                          formatDuration(Duration(milliseconds: millis)),
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          '配速 ${formatPace(pace)}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: kMutedTextColor,
-                          ),
-                        ),
-                      ],
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      '合计',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: kPrimaryColor,
+                      ),
                     ),
                   ),
-                  const Divider(height: 1),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      '${_recordedDistanceMeters}m',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: kPrimaryColor,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Text(
+                      formatStopwatch(_runElapsed),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: kPrimaryColor,
+                      ),
+                    ),
+                  ),
                 ],
-              );
-            }),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSegmentRow(ThemeData theme, int index, List<int> planned) {
+    final bool done = index < _segments.length;
+    final int distance = done
+        ? _segments[index].distanceMeters
+        : (index < planned.length ? planned[index] : _trackLengthMeters);
+    final String label = lapSegmentLabel(
+      trackLengthMeters: _trackLengthMeters,
+      index: index + 1,
+      distanceMeters: distance,
+    );
+    final bool isCurrent = !done && index == _segments.length && _hasSession;
+
+    final String timeText;
+    if (done) {
+      timeText = formatDuration(_segments[index].duration);
+    } else if (isCurrent && !_isResting) {
+      timeText = formatStopwatch(_currentSegment);
+    } else {
+      timeText = '--';
+    }
+
+    final TextStyle? labelStyle = theme.textTheme.bodyLarge?.copyWith(
+      color: isCurrent ? kPrimaryColor : kTextColor,
+      fontWeight: isCurrent ? FontWeight.w700 : FontWeight.normal,
+    );
+    final TextStyle? timeStyle = theme.textTheme.bodyLarge?.copyWith(
+      color: done ? kTextColor : kMutedTextColor,
+      fontWeight: done ? FontWeight.w600 : FontWeight.normal,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: <Widget>[
+          Expanded(flex: 3, child: Text(label, style: labelStyle)),
+          Expanded(
+            flex: 3,
+            child: Text(
+              '${distance}m',
+              style: theme.textTheme.bodyLarge?.copyWith(color: kMutedTextColor),
+            ),
+          ),
+          Expanded(flex: 4, child: Text(timeText, style: timeStyle)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentHeaderRow extends StatelessWidget {
+  const _SegmentHeaderRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle? style = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(color: kPrimaryColor);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: <Widget>[
+          Expanded(flex: 3, child: Text('分段', style: style)),
+          Expanded(flex: 3, child: Text('距离', style: style)),
+          Expanded(flex: 4, child: Text('用时', style: style)),
         ],
       ),
     );

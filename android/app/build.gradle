@@ -22,6 +22,9 @@ if (flutterVersionName == null) {
     flutterVersionName = "1.0"
 }
 
+// 对外显示的版本号：在 pubspec 版本号后追加 beta 标记
+def appVersionName = flutterVersionName + "（beta）"
+
 android {
     namespace = "com.track.toolkit"
     compileSdk = flutter.compileSdkVersion
@@ -40,7 +43,7 @@ android {
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode.toInteger()
-        versionName = flutterVersionName
+        versionName = appVersionName
     }
 
     buildTypes {
