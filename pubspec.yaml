@@ -1,0 +1,21 @@
+name: track_field_toolkit
+description: 田径通用工具 - 跑圈计时与中距离比赛配速模拟器
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # 固定版本，保证与 CI 中 Flutter 3.24.3 / compileSdk 34 完全兼容
+  shared_preferences: 2.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 4.0.0
+
+flutter:
+  uses-material-design: true
