@@ -66,6 +66,15 @@ class HomeScreen extends StatelessWidget {
                 ).textTheme.bodyMedium?.copyWith(color: kMutedTextColor),
               ),
             ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                kAppPoweredBy,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: kMutedTextColor),
+              ),
+            ),
           ],
         ),
       ),

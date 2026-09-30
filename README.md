@@ -125,7 +125,8 @@ track_field_toolkit_flutter/
 - **桌面图标**：`mipmap-anydpi-v26/ic_launcher.xml`（Android 8.0+ 自适应图标）
   + `mipmap-anydpi/ic_launcher.xml`（低版本回退矢量图标），图案为蓝色底 + 白色秒表。
 - **版本号**：`android/app/build.gradle` 会在 pubspec 版本号后追加 beta 标记，
-  当前对外版本为 `1.0.0（beta）`，versionCode = 2；首页底部也会显示该版本号。
+  当前对外版本为 `1.0.0（beta）`，versionCode = 2；首页底部会显示该版本号，
+  版本号下方一行是署名 `Powered by Lenin8431`（文案在 `lib/app_info.dart` 的 `kAppPoweredBy`）。
 
 改了 `applicationId` 时，记得同步修改 `lib/services/training_repository.dart` 里的存储路径常量。
 

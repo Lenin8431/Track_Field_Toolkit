@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:track_field_toolkit/app_info.dart';
 import 'package:track_field_toolkit/main.dart';
 import 'package:track_field_toolkit/screens/pace_screen.dart';
 import 'package:track_field_toolkit/screens/timer_screen.dart';
@@ -10,11 +11,16 @@ import 'package:track_field_toolkit/utils/time_format.dart';
 
 void main() {
   testWidgets('首页显示两个核心模块', (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await tester.pumpWidget(const TrackToolkitApp());
 
     expect(find.text('田径通用工具'), findsOneWidget);
     expect(find.text('跑圈计时'), findsOneWidget);
     expect(find.text('中距离比赛配速模拟器'), findsOneWidget);
+    expect(find.text('版本 $kAppVersionName'), findsOneWidget);
+    expect(find.text(kAppPoweredBy), findsOneWidget);
   });
 
   test('目标时间解析', () {

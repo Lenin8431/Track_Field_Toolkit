@@ -4,3 +4,6 @@
 /// （build.gradle 会在 pubspec 版本号后追加「（beta）」标记）。
 const String kAppDisplayName = '田径通用工具';
 const String kAppVersionName = '1.0.0（beta）';
+
+/// 首页版本号下方的署名
+const String kAppPoweredBy = 'Powered by Lenin8431';
